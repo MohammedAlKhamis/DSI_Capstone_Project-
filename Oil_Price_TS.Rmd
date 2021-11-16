@@ -1,0 +1,95 @@
+---
+title: "Forcasting Oil Price"
+author: "Mohammed AlKhamis"
+date: "11/9/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Importing Needed Packages 
+```{r setup, include=FALSE}
+library(TSstudio)
+library(tidyverse)
+library(forecast)
+library(dygraphs)
+library(ggfortify)
+library(fpp2)
+
+
+```
+
+# Importing the Data 
+
+```{r}
+price <- read_csv("data/oil_price.csv")
+head(price)
+# Convert the data frame to time series 
+
+price_ts <- price %>% dplyr::select(price = cost) %>% ts( start = c(1946, 1), frequency = 12)
+
+```
+
+# Exploring 
+
+```{r}
+dygraph(price_ts, 
+        main  = "World Monthly Oil price ",
+        ylab  = "price  in $",
+        xlab  = "Months") %>% 
+  dyRangeSelector()
+```
+
+```{r}
+ts_decompose(price_ts) # illustrating seasonality as well as other parameters 
+```
+
+```{r}
+ts_cor(price_ts) # Illustrating the lag seasonality 
+acf(price_ts)
+```
+
+```{r}
+ts_seasonal(price_ts, type = "normal")
+
+```
+# Time Series Models
+
+## Seasonal Naive model
+```{r}
+dy <- diff(price_ts) # taking the first difference of the time series to eliminate the trend and make it stationary 
+autoplot(dy)
+
+
+
+fit<- snaive(dy) #Residual SD: 6.9603 
+print(summary(fit))
+checkresiduals(fit)
+```
+
+## ETS Model
+```{r}
+fit_ets<- ets(price_ts) #Residual SD: 0.089
+print(summary(fit_ets))
+checkresiduals(fit_ets)
+```
+
+## ARIMA Model 
+```{r}
+fit_arima<- auto.arima(price_ts, d=1) #Residual SD: 4.682948 
+print(summary(fit_arima))
+checkresiduals(fit_arima)
+
+```
+
+# Forcasting 
+I choosed the ETS since it has the lowest residual
+
+```{r}
+
+fcs <- forecast(fit_ets, h= 12*10-11)# forcasting 10 years 
+plot_forecast(fcs)
+```
+The prediction shows an increase in the oil price for the next 10 years. Which make sense since the 
+oil is still going to be heavily used by lots of countries. Also, the oil use is going to change as well from 
+electricity production to .....

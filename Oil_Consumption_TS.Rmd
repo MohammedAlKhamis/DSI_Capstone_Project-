@@ -1,0 +1,226 @@
+---
+title: "Forcasting Oil Consumption"
+author: "Mohammed AlKhamis"
+date: "11/9/2021"
+output: html_document
+---
+# Importing Needed Packages 
+```{r setup, include=FALSE}
+library(TSstudio)
+library(tidyverse)
+library(forecast)
+library(dygraphs)
+library(tidyverse)
+library(readxl)
+library(tidyquant)
+library(mice)
+library(visdat)
+library(naniar)
+library(plotly)
+library(ggplot2)
+library(tidymodels)
+library(ggfortify)
+
+```
+
+# Importing the Data 
+```{r}
+oil_consumption1 <- read_excel("data/oil-consumption-per-TBD.xlsx")
+
+# change the class of the columns to numeric 
+vec<- seq(2,57,1)
+oil_consumption1[ , vec] <- apply(oil_consumption1[ , vec,drop=F], 2,           
+                                 function(x) as.numeric(as.character(x)))
+
+# Tidy my data 
+oil_consumption1 <- oil_consumption1 %>% 
+  pivot_longer(-c(country, per_region), names_to = "year", values_to = "oil_comsumption_in_EJ")
+
+# Fill the missing values by back filling method  
+oil_consumption1 <- oil_consumption1 %>% fill(oil_comsumption_in_EJ, .direction = "up")
+sum(is.na(oil_consumption1))
+```
+
+```{r}
+# head(oil_consumption1)
+# Convert the data frame to time series 
+consumption_ts <- oil_consumption1 %>% group_by(year) %>% summarise(Consumption_in_MBD = sum(oil_comsumption_in_EJ)/1000) %>% 
+  dplyr::select(Consumption_in_MBD) %>%
+  ts(start = 1965, frequency = 1)
+```
+
+# Exploring 
+
+```{r}
+dygraph(consumption_ts, 
+        main  = "World Oil Consumption",
+        ylab  = "Consumption in Million Barrels Daily",
+        xlab  = "Years") %>% 
+  dyRangeSelector()
+```
+
+```{r}
+ts_cor(consumption_ts)# Illustrating the lag seasonality 
+
+```
+# Time Series Models
+
+```{r}
+dyy<- diff(consumption_ts) # taking the first difference of the time series to eliminate the trend and make it stationary
+autoplot(dyy)
+```
+
+## Seasonal Naive model
+
+```{r}
+fit<- snaive(dyy) #Residual SD: 1.9801   
+print(summary(fit))
+checkresiduals(fit)
+```
+
+## ETS Model
+
+```{r}
+
+fit_ets<- ets(consumption_ts) #Residual SD: 0.0258
+print(summary(fit_ets))
+checkresiduals(fit_ets)
+```
+
+## ARIMA Model 
+```{r}
+fit_arima<- auto.arima(consumption_ts, d=1) #Residual SD: 1.843909
+print(summary(fit_arima))
+checkresiduals(fit_arima)
+```
+#AR model 
+```{r}
+
+library(vars)
+library(mFilter)
+library(tseries)
+library(TSstudio)
+library(forecast)
+library(tidyverse)
+VARselect(consumption_ts,lag.max = 10, type = "const")
+
+AR <- ar(diff(consumption_ts), p= 2, type = "const") # Residual SD = 1.916507
+print(summary(AR)) 
+checkresiduals(AR)
+```
+
+# Forcasting Oil Consumtion 
+
+I have chosen the ETS since it has the lowest residual
+```{r}
+
+fcs_cons <- forecast(fit_ets, h= 10) # forecasting 10 years 
+autoplot(fcs_cons)
+print(summary(fcs_cons))
+plot_forecast(fcs_cons)
+```
+As you can see because of the pandemic the forecasting was miss leaded. Therefore, I tried to approach this problem 
+from different side. I eliminated the 2020 drop (from the pandemic) and the forecast, lets see what happened
+
+
+
+```{r}
+oil_consumption2 <- read_excel("data/oil-consumption-per-TBD_2.xlsx")
+ # change the class of the columns to numeric 
+vec<- seq(2,56,1)
+oil_consumption2[ , vec] <- apply(oil_consumption2[ , vec,drop=F], 2,           
+                                 function(x) as.numeric(as.character(x)))
+
+# Tidy my data 
+oil_consumption2 <- oil_consumption2 %>% 
+  pivot_longer(-c(country, per_region), names_to = "year", values_to = "oil_comsumption_in_MBD")
+
+# therefore we will do a back fill 
+oil_consumption2 <- oil_consumption2 %>% fill(oil_comsumption_in_MBD, .direction = "up")
+sum(is.na(oil_consumption1))
+
+```
+
+
+```{r}
+consumption_ts1 <- oil_consumption2 %>% group_by(year) %>% summarise(Consumption_in_MBD = sum(oil_comsumption_in_MBD)/1000) %>% 
+ dplyr:: select(Consumption_in_MBD ) %>%
+ts(, start = c(1965), frequency = 1)
+plot(consumption_ts1)
+```
+
+## Seasonal Naive model
+
+```{r}
+fit1<- snaive(diff(consumption_ts1)) #Residual SD: 1.5193     
+print(summary(fit1))
+checkresiduals(fit1)
+```
+
+ETS Model 
+```{r}
+fit_ets1<- ets(consumption_ts1) #Residual SD: 1.3983
+print(summary(fit_ets1))
+checkresiduals(fit_ets1)
+```
+
+
+## ARIMA Model 
+```{r}
+fit_arima1<- auto.arima(consumption_ts1, d=1) #Residual SD: 1.246595
+print(summary(fit_arima1))
+checkresiduals(fit_arima1)
+```
+#AR model 
+```{r}
+
+library(vars)
+library(mFilter)
+library(tseries)
+library(TSstudio)
+library(forecast)
+library(tidyverse)
+VARselect(consumption_ts1,lag.max = 10, type = "const")
+
+AR1 <- ar(diff(consumption_ts1), p= 2, type = "const") # Residual SD = 1.2907
+AR1 <- ar(diff(consumption_ts1), p= 6, type = "const") # Residual SD = 1.2907
+
+print(summary(AR)) 
+checkresiduals(AR)
+```
+
+```{r}
+# forecast
+fcs_cons1 <- forecast(fit_arima1, h= 10)
+autoplot(fcs_cons1)
+print(summary(fcs_cons1))
+plot_forecast(fcs_cons1)
+```
+
+
+```{r}
+forcast_con1 <- fortify(fcs_cons1) 
+forcast_con1[1:56, 3]
+
+consumption_df1 <- data.frame(date  = forcast_con1$Index, consumption = c(forcast_con1 [ 1:56, 3], forcast_con1 [ 57:nrow(forcast_con1), 4]))
+model <- consumption_df1
+
+```
+
+Now lets add the drop in 2020
+
+```{r echo=FALSE}
+  
+#adjust
+model[56, 2] <- 88.477
+model[62:65, 2]  <- model[62:65, 2] -  seq(1,2,0.33)
+plot(model, type= "l")
+  
+
+```
+
+
+
+
+
+
